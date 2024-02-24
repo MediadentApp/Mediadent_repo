@@ -1,0 +1,30 @@
+{
+  "name": "mediadent_backend",
+  "version": "1.0.0",
+  "description": "Backend for Mediadent app",
+  "main": "src/app.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": " \"echo \\\"Error: no test specified\\\" && exit 1\"",
+    "start": "nodemon server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vin51435/Mediadent_Backend.git"
+  },
+  "keywords": [
+    "mediadent",
+    "Mediadent"
+  ],
+  "author": "Vinay Poojary",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/vin51435/Mediadent_Backend/issues"
+  },
+  "homepage": "https://github.com/vin51435/Mediadent_Backend#readme",
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
