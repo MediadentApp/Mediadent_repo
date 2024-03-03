@@ -1,8 +1,10 @@
 const express = require('express');
-const router = express.Router()
+const mainRoutes = require('./mainRoutes');
+const userRoutes = require('./userRoutes');
 
-const mainRoutes = require('./mainRoutes')
+const router = express.Router();
 
-router.use('/', mainRoutes)
+router.use('/', mainRoutes);
+router.use('/api/v1/users', userRoutes);
 
-module.exports = router
+module.exports = router;
