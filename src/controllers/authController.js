@@ -33,28 +33,20 @@ const createSendToken = (user, statusCode, res) => {
 
 exports.emailReg = catchAsync(async (req, res, next) => {
   const { email } = req.body;
-  const tempUserDb = await TempUser.findOne({ email: email });
 
+  // Check if the email exits in TempUser
+  const tempUserDb = await TempUser.findOne({ email: email });
   if (tempUserDb && tempUserDb.otpSendAt) {
     if (await tempUserDb.checkOtpTime()) {
       return next(new AppError(`If you have already sent an OTP, please wait for ${config.otp.sendOtpAfter} minutes before requesting another one.`));
     }
   }
-
-  await TempUser.findOneAndDelete({ email: email });
+  // await TempUser.findOneAndDelete({ email: email });
 
   // Generate OTP and set expiration time
   const otp = util.generateOTP();
   const otpSendAt = new Date(Date.now());
   const otpExpiration = new Date(Date.now() + config.otp.otpExpiration * 60 * 1000);
-
-  const tempUser = await TempUser.create({
-    email,
-    otp,
-    otpSendAt,
-    otpExpiration
-  });
-  await tempUser.save();
 
   // Send OTP to user's email
   const emailMessage = `Your OTP for email verification is: ${otp}, The otp will expire in ${config.otp.otpExpiration}`;
@@ -65,6 +57,14 @@ exports.emailReg = catchAsync(async (req, res, next) => {
       message: emailMessage
     });
 
+    const tempUser = await TempUser.create({
+      email,
+      otp,
+      otpSendAt,
+      otpExpiration
+    });
+    await tempUser.save();
+
     res.status(200).json({
       status: 'success',
       message: 'OTP sent to your email for verification',
@@ -74,8 +74,6 @@ exports.emailReg = catchAsync(async (req, res, next) => {
     });
     // next();
   } catch (err) {
-    TempUser.findOneAndDelete({ email: email });
-
     return next(new AppError('There was an error sending the email', 500));
   }
 });
