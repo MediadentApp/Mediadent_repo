@@ -16,6 +16,7 @@
     "spaced-comment": "off",
     "arrow-parens": "off",
     "import/no-extraneous-dependencies": "off",
+    "linebreak-style": ["error", "windows"],
     // "prettier/prettier": "error",
     "no-console": "warn",
     "consistent-return": "off",

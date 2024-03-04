@@ -2,9 +2,12 @@ const crypto = require('crypto');
 const { promisify } = require('util');
 const jwt = require('jsonwebtoken');
 const User = require('../models/userModel');
+const TempUser = require('../models/tempUserModel');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
 const sendEmail = require('../utils/email');
+const util = require('../utils/util');
+const config = require('../config/config');
 
 const signToken = id => (
   jwt.sign(
@@ -28,14 +31,89 @@ const createSendToken = (user, statusCode, res) => {
   });
 };
 
+exports.emailReg = catchAsync(async (req, res, next) => {
+  const { email } = req.body;
+  const tempUserDb = await TempUser.findOne({ email: email });
+
+  if (tempUserDb && tempUserDb.otpSendAt) {
+    if (await tempUserDb.checkOtpTime()) {
+      return next(new AppError(`If you have already sent an OTP, please wait for ${config.otp.sendOtpAfter} minutes before requesting another one.`));
+    }
+  }
+
+  await TempUser.findOneAndDelete({ email: email });
+
+  // Generate OTP and set expiration time
+  const otp = util.generateOTP();
+  const otpSendAt = new Date(Date.now());
+  const otpExpiration = new Date(Date.now() + config.otp.otpExpiration * 60 * 1000);
+
+  const tempUser = await TempUser.create({
+    email,
+    otp,
+    otpSendAt,
+    otpExpiration
+  });
+  await tempUser.save();
+
+  // Send OTP to user's email
+  const emailMessage = `Your OTP for email verification is: ${otp}, The otp will expire in ${config.otp.otpExpiration}`;
+  try {
+    await sendEmail({
+      email: email,
+      subject: 'Email Verification OTP',
+      message: emailMessage
+    });
+
+    res.status(200).json({
+      status: 'success',
+      message: 'OTP sent to your email for verification',
+      data: {
+        email
+      }
+    });
+    // next();
+  } catch (err) {
+    TempUser.findOneAndDelete({ email: email });
+
+    return next(new AppError('There was an error sending the email', 500));
+  }
+});
+
+exports.emailVerify = catchAsync(async (req, res, next) => {
+  const { otp, email } = req.body;
+  const tempUser = await TempUser.findOne({ email });
+  if (!tempUser) return next(new AppError('Register your email first', 401));
+  if (!tempUser.checkOtp(otp)) return next(new AppError('The otp does not match', 401));
+  if (tempUser.checkOtpExpiration()) return next(new AppError('The otp has expired', 401));
+
+  tempUser.emailVerified = true;
+  await tempUser.save({ validateBeforeSave: false });
+
+  res.status(200).json({
+    status: 'success',
+    message: 'Email is verified',
+    data: {
+      email
+    }
+  });
+});
+
 exports.signup = catchAsync(async (req, res, next) => {
+  const {
+    firstName, lastName, email, password, passwordConfirm, passwordChangedAt
+  } = req.body;
+
+  const tempUser = await TempUser.findOne({ email });
+  if (!tempUser || !tempUser.emailVerified) return next(new AppError('Register your email first', 401));
+
   const newUser = await User.create({
-    firstName: req.body.firstName,
-    lastName: req.body.lastName,
-    email: req.body.email,
-    password: req.body.password,
-    passwordConfirm: req.body.passwordConfirm,
-    passwordChangedAt: req.body?.passwordChangedAt
+    firstName: firstName,
+    lastName: lastName,
+    email: tempUser.email,
+    password: password,
+    passwordConfirm: passwordConfirm,
+    passwordChangedAt: passwordChangedAt
   });
 
   // Creating jwt token
@@ -150,6 +228,7 @@ exports.resetPassword = catchAsync(async (req, res, next) => {
   await user.save(); // save the above to db
 
   // 3) Update changedPasswordAt property of the user
+  // This will happen automatically in userModel
 
   // 4) Log the user in, send JWT
   createSendToken(user, 200, res);
